@@ -1,0 +1,39 @@
+# Rust supply-chain auditing via cargo-vet.
+# CodeQL has limited Rust support (no first-party analyzer at time of writing),
+# so cargo-vet is used here instead to satisfy the equivalent "code-scanning"
+# control for dependency provenance and review.
+name: cargo-vet
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 5 * * 1' # Weekly, Mondays at 05:00 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+    - name: Install cargo-vet
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-vet@0.10.0
+    - name: Run cargo vet
+      run: cargo vet --locked

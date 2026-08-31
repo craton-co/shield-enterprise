@@ -1,0 +1,188 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        # Full history is required for `git verify-tag`; without it the
+        # action-supplied shallow clone does not carry the tag object.
+        fetch-depth: 0
+    - name: Verify git tag signature (pre-flight)
+      # Release is only cut from a GPG-signed tag. Do this BEFORE any build
+      # / sign step so an attacker who pushes an unsigned tag cannot cause
+      # cosign / SLSA to sign artefacts on their behalf.
+      run: |
+        git verify-tag "${GITHUB_REF_NAME}" || {
+          echo "::error::Tag ${GITHUB_REF_NAME} is not GPG-signed";
+          exit 1;
+        }
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+    - name: Format check
+      run: cargo fmt --all -- --check
+    - name: Clippy
+      run: cargo clippy --workspace --all-targets -- -D warnings
+    - name: Test
+      run: cargo test --workspace --locked
+    - name: Install cargo-audit
+      # Pinned to the same version installed by `.github/workflows/ci.yml`
+      # (supply-chain job) and `.github/workflows/security.yml` (nightly
+      # audit job). When bumping, update ALL THREE workflows together so the
+      # release verify gate, per-PR supply-chain gate, and nightly Security
+      # workflow exercise the same auditor (MED-3, MED-12).
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-audit@0.21.2
+    - name: Install cargo-deny
+      # Pinned to the same version installed by `.github/workflows/ci.yml`
+      # (supply-chain job) and `.github/workflows/security.yml` (nightly
+      # deny job). When bumping, update ALL THREE workflows together
+      # (MED-3, MED-12).
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-deny@0.18.2
+    - name: cargo audit
+      run: cargo audit
+    - name: cargo deny check
+      run: cargo deny check
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Derive tag
+      id: tag
+      run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+    - name: Install cargo-cyclonedx
+      # Pinned to the same version referenced by `scripts/generate-sbom.sh`
+      # and `.github/workflows/security.yml`. When bumping, update ALL THREE
+      # locations together so SBOMs produced locally, by the nightly Security
+      # workflow, and by the Release workflow remain byte-identical (MED-12).
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-cyclonedx@0.5.7
+    - name: Generate CycloneDX SBOM
+      # Use the single shared script so that release artefacts and Security-
+      # workflow artefacts are produced from identical inputs. Prevents
+      # SBOM divergence between the nightly audit and the released tarball.
+      run: |
+        bash scripts/generate-sbom.sh
+        mkdir -p dist
+        cp -r artifacts/* dist/
+    - name: Package source tarball
+      run: |
+        mkdir -p dist
+        git archive --format=tar.gz --prefix="craton-shield-enterprise-${{ steps.tag.outputs.tag }}/" \
+          -o "dist/craton-shield-enterprise-${{ steps.tag.outputs.tag }}.tar.gz" HEAD
+        # Consolidate the per-crate bom.json files under dist/ for easier signing.
+        find . -name bom.json -not -path "./dist/*" -exec cp --parents {} dist/ \;
+        ls -R dist/
+    - name: Compute sha256 + base64 digest for SLSA provenance
+      id: digest
+      run: |
+        sha256sum dist/*.tar.gz dist/sbom.json dist/sbom.xml 2>/dev/null | base64 -w0 > dist/sha256sums.b64
+        digest=$(sha256sum dist/craton-shield-enterprise-${{ steps.tag.outputs.tag }}.tar.gz | awk '{print $1}')
+        echo "digest=sha256:${digest}" >> "$GITHUB_OUTPUT"
+    - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4
+      with:
+        name: release-artifacts
+        path: dist/
+
+  provenance:
+    # SLSA v1.0 build provenance via the canonical generator action.
+    # Produces an in-toto JSONL attestation signed with the transient
+    # Sigstore cert issued by the GitHub OIDC provider.
+    needs: build
+    permissions:
+      id-token: write
+      contents: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: "${{ needs.build.outputs.digest }}"
+      provenance-name: "craton-shield-enterprise-${{ needs.build.outputs.tag }}.intoto.jsonl"
+
+  publish:
+    needs: [build, provenance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        fetch-depth: 0
+    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+      with:
+        name: release-artifacts
+        path: dist/
+    - name: Re-verify git tag signature
+      # Defence in depth: the `verify` job already checked this before any
+      # build step, but we repeat the check here to guarantee the publish
+      # job will refuse to run against a tag that lost its signature between
+      # jobs (e.g. due to a force-push).
+      run: |
+        git verify-tag "${{ needs.build.outputs.tag }}" || {
+          echo "::error::Tag ${{ needs.build.outputs.tag }} is not GPG-signed";
+          exit 1;
+        }
+    - name: Install cosign
+      uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3
+    - name: Install slsa-verifier
+      uses: slsa-framework/slsa-verifier/actions/installer@v2.5.1
+    - name: Download SLSA provenance
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+      with:
+        name: "craton-shield-enterprise-${{ needs.build.outputs.tag }}.intoto.jsonl"
+        path: dist/
+    - name: Verify SLSA provenance
+      run: |
+        slsa-verifier verify-artifact \
+          --provenance-path "dist/craton-shield-enterprise-${{ needs.build.outputs.tag }}.intoto.jsonl" \
+          --source-uri "github.com/${{ github.repository }}" \
+          --source-tag "${{ needs.build.outputs.tag }}" \
+          "dist/craton-shield-enterprise-${{ needs.build.outputs.tag }}.tar.gz"
+    - name: Cosign keyless sign release tarball
+      env:
+        COSIGN_EXPERIMENTAL: "1"
+      run: |
+        cosign sign-blob --yes \
+          --output-signature dist/craton-shield-enterprise-${{ needs.build.outputs.tag }}.tar.gz.sig \
+          --output-certificate dist/craton-shield-enterprise-${{ needs.build.outputs.tag }}.tar.gz.cert \
+          dist/craton-shield-enterprise-${{ needs.build.outputs.tag }}.tar.gz
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2
+      with:
+        generate_release_notes: true
+        files: |
+          dist/*.tar.gz
+          dist/*.tar.gz.sig
+          dist/*.tar.gz.cert
+          dist/sbom.json
+          dist/sbom.xml
+          dist/sha256sums.b64
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

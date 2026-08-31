@@ -1,0 +1,42 @@
+[package]
+name = "vs-hal-qnx"
+description = "QNX RTOS HAL implementation of vs-hal traits for CAN bus, Ethernet PHY, and monotonic timers"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+keywords = ["qnx", "automotive", "hal", "no-std", "rtos"]
+categories = ["no-std", "embedded", "hardware-support", "os"]
+# BSL-1.1 is not SPDX; point at the workspace LICENSE file.
+license-file = "../../LICENSE"
+
+[dependencies]
+vs-types = { path = "../../../craton-shield/core/types" }
+vs-hal = { path = "../../../craton-shield/core/hal" }
+
+[features]
+default = []
+# Opt-in: enable QNX-specific CAN bus-off and Ethernet link-state probes
+# (`CAN_DEVCTL_GET_BUS_STATE`, `SIOCGIFFLAGS`). Both command numbers and
+# their argument layouts are driver- and SDP-version-specific; enabling
+# this feature without a build.rs / local patch that supplies the right
+# values fires a `compile_error!`. See README "Third-party headers".
+qnx-link-detect = []
+# Exposes pure parse/serialize helpers (`parse_can_frame`,
+# `serialize_can_frame`, `parse_eth_frame`) as `pub` so external fuzz
+# targets in `fuzz/targets/` can reach them. Has no runtime effect.
+fuzz = []
+
+[package.metadata.docs.rs]
+# `all-features` activates `fuzz` (safe) but `qnx-link-detect` deliberately
+# fires `compile_error!` until callers supply SDP-specific constants, so
+# enable only the documentation-safe features here.
+all-features = true
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["aarch64-unknown-nto-qnx710", "x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

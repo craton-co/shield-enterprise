@@ -1,0 +1,67 @@
+[package]
+name = "vs-crypto-tpm"
+description = "Craton Shield TPM 2.0 TSS2-backed crypto provider"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+keywords = ["tpm", "crypto", "no-std", "automotive", "etm"]
+categories = ["cryptography", "no-std", "embedded", "hardware-support"]
+# BSL-1.1 is not SPDX; point at the workspace LICENSE file.
+license-file = "../../LICENSE"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+vs-types = { path = "../../../craton-shield/core/types" }
+vs-crypto = { path = "../../../craton-shield/core/crypto" }
+vs-p256-validate = { path = "../p256-validate" }
+subtle = { version = "2", default-features = false }
+
+[features]
+default = []
+# Enables strict-RNG validation: a TPM `GetRandom` call that returns
+# `TSS2_RC_SUCCESS` without actually writing the requested bytes is treated
+# as an error rather than silently yielding a partially-populated buffer.
+strict-rng = []
+
+# Cannot use `lints.workspace = true` together with per-crate overrides.
+# Replicate workspace lints here and override unsafe_code to allow (FFI boundary).
+[lints.rust]
+unsafe_code = "allow"   # FFI call sites; all carry SAFETY comments.
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# LOW-2 audit fix: workspace tightened these casts to `deny`. This crate
+# re-allows them locally because TPM 2.0 / TSS2 ESAPI bindings convert
+# between `UINT32`/`UINT16` ESAPI fields and Rust-side widths at every
+# function-pointer call site, and AES-CFB/HMAC chunk lengths are
+# routinely cast between `usize` (Rust buffer math) and `u16`/`u32`
+# (ESAPI parameter types). The casts are spec-mandated, not Rust
+# expressivity gaps. Per-site allows would touch dozens of FFI shim
+# lines. The re-allow is confined to this crate; non-FFI crates inherit
+# the workspace `deny`.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+cast_lossless = "allow"
+# FFI-specific: raw-pointer casts are idiomatic in TSS2 ESAPI bindings.
+borrow_as_ptr = "allow"
+ref_as_ptr = "allow"
+ptr_as_ptr = "allow"
+ptr_cast_constness = "allow"
+# TpmFunctionList fields all have the esys_ prefix — this is intentional
+# to match the ESAPI function naming convention exactly.
+struct_field_names = "allow"
+
+[dev-dependencies]
+serial_test = "3"

@@ -1,0 +1,10 @@
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+runner = "qemu-aarch64 -L /usr/aarch64-linux-gnu"
+
+# TriCore TC3xx (Infineon AURIX) — requires custom LLVM toolchain
+# See docs/aurix-evaluation.md for feasibility analysis.
+# Uncomment below if building with HighTec tricore-elf toolchain.
+# [target.tricore-tc162-none-elf]
+# linker = "tricore-elf-gcc"
+# rustflags = ["-C", "target-cpu=tc162"]

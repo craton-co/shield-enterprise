@@ -1,0 +1,76 @@
+# cargo-deny configuration for Craton Shield
+#
+# Policy summary (authoritative source: docs/supply-chain.md):
+#   - Security vulnerabilities (RustSec) block the build.
+#   - Unmaintained crates (RustSec informational) block the build, across
+#     the entire dependency graph (not just the workspace).
+#   - Yanked crates.io releases block the build.
+#   - License allow-list is enumerated below; everything else (including
+#     all copyleft variants) is rejected. The allow-list MUST stay in sync
+#     with `.github/workflows/dependency-review.yml`.
+#   - `tokio`/`async-std`/`reqwest`/etc. are banned because the project
+#     is `#![no_std]`.
+#
+# Run: cargo deny check
+# Docs: https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+version = 2
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Yanked crates.io releases block the build.
+yanked = "deny"
+# In v2, RustSec security advisories (`vulnerability`) are denied by
+# default and the dedicated key has been removed; do not re-add it.
+# `unmaintained` defaults to "workspace" (only direct workspace deps).
+# We escalate to "all" so transitive unmaintained crates also block.
+unmaintained = "all"
+# Add an advisory ID here ONLY with a written justification and an
+# expiry. Empty list = no exceptions. Reviewers: every entry must be
+# revisited at each release.
+ignore = []
+
+[licenses]
+version = 2
+# BSL-1.1 is non-SPDX and applies to first-party crates only; third-party
+# deps must match the allow list below. Copyleft licences are implicitly
+# rejected because they are not in `allow`.
+# NOTE: keep this list in sync with `.github/workflows/dependency-review.yml`.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+]
+
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+# Deny specific crates that are inappropriate for no_std embedded use
+deny = [
+    # No std-dependent allocators
+    { name = "jemallocator" },
+    # No tokio/async runtimes in embedded
+    { name = "tokio" },
+    { name = "async-std" },
+    # No networking crates (we're bare-metal)
+    { name = "reqwest" },
+    { name = "hyper" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

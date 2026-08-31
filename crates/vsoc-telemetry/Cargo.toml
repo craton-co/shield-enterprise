@@ -1,0 +1,122 @@
+[package]
+name = "vs-vsoc-telemetry"
+description = "Craton Shield VSOC telemetry uplink"
+edition.workspace = true
+version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+keywords = ["telemetry", "vsoc", "automotive", "aes-gcm", "no-std"]
+categories = ["embedded", "no-std", "cryptography"]
+# BSL-1.1 is not SPDX; point at the workspace LICENSE file.
+license-file = "../../LICENSE"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+vs-types = { path = "../../../craton-shield/core/types" }
+vs-crypto = { path = "../../../craton-shield/core/crypto" }
+
+[dev-dependencies]
+# Pull in `vs-crypto` with the `software` feature so the integration test
+# `flush_against_real_aead_differs_and_detects_tag_flip` (see `src/lib.rs`)
+# can wire up a real AES-GCM provider — `MockCrypto` is an identity
+# transform with a constant 0xAA tag and proves nothing about AEAD
+# integration. Dev-only; never compiled into production.
+vs-crypto = { path = "../../../craton-shield/core/crypto", features = ["software"] }
+# Used by the audit-H2 test suite to assert at the type level that
+# a plain `CounterStorage` impl does NOT satisfy `RollbackResistantStorage`
+# (`assert_not_impl_any!`), and that the blessed wrapper does
+# (`assert_impl_all!`). A `compile_fail` doctest would be awkward in this
+# `#![no_std]` crate because doctests are linked against `std`.
+static_assertions = "1"
+
+[features]
+default = []
+
+# Re-exposes test-only API surface (`NoOpPersistence`,
+# `TelemetryUplink::flush_no_persist`, `PersistedFlushCounter::restore`)
+# to downstream test/dev code that needs them outside of this crate's own
+# `cfg(test)` (e.g. the workspace-root integration tests and the fuzz
+# harness). These items are footguns — `NoOpPersistence` silently allows
+# AES-GCM nonce reuse across reboots and `restore(u64)` is the
+# unauthenticated rollback constructor — so they are NOT part of the
+# default surface and `#[deprecated]` alone is not a safety boundary.
+# Confined to dev-dep activation; MUST NEVER be enabled in production.
+#
+# audit-H3: a release-profile build with this feature active fails to
+# compile thanks to the `compile_error!` guard at the top of `src/lib.rs`.
+# See the audit-H3 section of `README.md`.
+test-only = []
+
+# Disables the convenience `TelemetryUplink::new()` constructor so that every
+# caller must provide a `PersistedFlushCounter`. Production deployments that
+# share an AES-GCM encryption key across reboots must enable this feature to
+# eliminate nonce-reuse accidents by construction.
+#
+# When enabled this ALSO removes `PersistedFlushCounter::restore(u64)` (the
+# unauthenticated rollback path) and the deprecated `flush_no_persist()`
+# wrapper from the API surface — callers MUST use
+# `PersistedFlushCounter::restore_authenticated` and either
+# `flush_with_persistence` or `flush_outcome`.
+strict-nonce = []
+
+# Re-enables the unauthenticated `PersistedFlushCounter::restore(u64)` shim.
+# This MUST NEVER be enabled in production: a caller who restores `0` after
+# dropping the on-disk file silently rolls back the flush counter, which
+# causes AES-GCM nonce reuse under the same encryption key. Only intended
+# for the in-crate test suite; gated separately from `cfg(test)` so a
+# downstream crate's integration tests cannot accidentally pull it in.
+#
+# audit-H3: a release-profile build with this feature active fails to
+# compile thanks to the `compile_error!` guard at the top of `src/lib.rs`.
+# Cargo feature unification will surface this as a build break if any
+# downstream crate accidentally turns this on in a release-profile
+# dependency graph. See the audit-H3 section of `README.md`.
+unauthenticated-restore = []
+
+# Escape hatch for security engineers running a hand-audited release with
+# the dangerous features active for forensic / regression-bisect work. This
+# disables the audit-H3 `compile_error!` guard. NEVER enable this in a
+# shipping artefact — it exists only so the guard can be bypassed for
+# explicit, reviewed audits.
+deliberately-unsafe-release-acknowledged = []
+
+# Dev-only: pulls in `vs-crypto`'s software AES-GCM implementation so the
+# integration test in `lib.rs` can prove that the uplink wires up correctly
+# against a real AEAD (ciphertext varies across nonces; tag-flip is
+# detected). Not used by any production path. Enabled automatically for
+# `cargo test` via the dev-dependency below.
+
+# The crate is `#![no_std]` and `unsafe`-free except for a small number of
+# `core::ptr::write_volatile` wipes of transient plaintext buffers. Override
+# the workspace `unsafe_code = "deny"` so those wipes compile, and replicate
+# the other workspace lints explicitly.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# LOW-2 audit fix: workspace tightened these casts to `deny`. This crate
+# re-allows them locally because the telemetry framer converts between
+# `usize` (Rust buffer offsets) and the on-wire `u16`/`u32` length
+# fields of the audited frame layout at every encode/decode boundary,
+# and the AES-GCM nonce counter (`u64`) is split into the
+# 96-bit-IV layout via 32-/64-bit limb casts that are explicitly
+# specified by the NIST SP 800-38D framing — not Rust expressivity
+# gaps. Lengths and counter values are bounded by the audited frame
+# constants (`MAX_TELEMETRY_FRAME ≤ 2048` per CLAUDE.md, flush
+# counter ≤ `u32::MAX`). The re-allow is confined to this crate; the
+# workspace `deny` still catches casts in non-FFI / non-framing crates.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+cast_lossless = "allow"

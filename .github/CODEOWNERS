@@ -1,0 +1,9 @@
+# Global ownership
+* @craton-co/founders
+
+# Crypto crates require security review
+crates/crypto-pkcs11/ @craton-co/founders
+crates/crypto-tpm/ @craton-co/founders
+
+# CI and security workflows
+.github/ @craton-co/founders

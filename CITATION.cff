@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+title: "Craton Shield Enterprise"
+message: "If you use this software in your research, please cite it as below."
+type: software
+authors:
+  - name: "Craton Software Company"
+    website: "https://github.com/craton-co"
+# Cross-checked 2026-05-23: repository-code, license-url, version match
+# Cargo.toml workspace metadata (craton-co/craton-shield-enterprise, 0.7.1).
+repository-code: "https://github.com/craton-co/craton-shield-enterprise"
+license-url: "https://github.com/craton-co/craton-shield-enterprise/blob/main/LICENSE"
+version: "0.7.1"
+# TODO(maintainers): verify date against signed tag at release time.
+# No `v0.7.1` git tag exists in this repository as of 2026-05-23, so the
+# date below cannot be cross-checked against a tagger/creator date. The
+# value mirrors the CHANGELOG entry for 0.7.1; update both together if
+# the signed release tag carries a different commit date.
+date-released: "2026-03-28"
+abstract: >-
+  Production-hardened vehicle cybersecurity runtime with hardware-backed
+  cryptography (PKCS#11, TPM 2.0), QNX RTOS support, and fleet telemetry.
+  Designed for ISO/SAE 21434, UN R155, and ISO 26262 ASIL-B compliance.
+keywords:
+  - automotive-cybersecurity
+  - embedded-security
+  - no-std
+  - rust
+  - pkcs11
+  - tpm
+  - iso-21434
+  - iso-26262

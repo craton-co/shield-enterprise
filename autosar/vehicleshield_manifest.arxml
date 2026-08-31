@@ -1,0 +1,532 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: LicenseRef-BSL-1.1 -->
+<!-- Copyright (c) Craton; see /LICENSE -->
+<!--
+  Craton Shield AUTOSAR Adaptive Platform Manifest
+
+  Defines the Adaptive Application manifest for Craton Shield as an
+  AUTOSAR Adaptive Platform application, including:
+    - Application Design
+    - Service Interface definitions
+    - Execution Manifest
+    - Machine Mapping
+
+  Compliant with AUTOSAR Adaptive Platform R22-11.
+
+  Reference standards:
+    - ISO/SAE 21434 (Cybersecurity Engineering)
+    - UN R155 (Vehicle Cyber Security)
+    - AUTOSAR Adaptive Platform Foundation (AP R22-11)
+-->
+<AUTOSAR xmlns="http://autosar.org/schema/r4.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://autosar.org/schema/r4.0 AUTOSAR_00051.xsd">
+
+  <AR-PACKAGES>
+
+    <!-- ================================================================
+         Package: Craton Shield Application Design
+         ================================================================ -->
+    <AR-PACKAGE>
+      <SHORT-NAME>CratonShield</SHORT-NAME>
+      <LONG-NAME>
+        <L-4 L="EN">Craton Shield Automotive Cybersecurity Runtime</L-4>
+      </LONG-NAME>
+
+      <AR-PACKAGES>
+
+        <!-- Application Design -->
+        <AR-PACKAGE>
+          <SHORT-NAME>ApplicationDesign</SHORT-NAME>
+
+          <ELEMENTS>
+            <ADAPTIVE-APPLICATION-SW-COMPONENT-TYPE>
+              <SHORT-NAME>CratonShieldRuntime</SHORT-NAME>
+              <LONG-NAME>
+                <L-4 L="EN">Craton Shield Runtime Cybersecurity Application</L-4>
+              </LONG-NAME>
+              <ADMIN-DATA>
+                <SDGS>
+                  <SDG GID="AutosarStandard">
+                    <SD GID="SafetyClassification">QM</SD>
+                    <SD GID="SecurityLevel">CAL-4</SD>
+                  </SDG>
+                </SDGS>
+              </ADMIN-DATA>
+
+              <PORTS>
+                <!-- Provided Ports -->
+                <P-PORT-PROTOTYPE>
+                  <SHORT-NAME>PPort_IdsAlerts</SHORT-NAME>
+                  <PROVIDED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_IdsAlerts
+                  </PROVIDED-INTERFACE-TREF>
+                </P-PORT-PROTOTYPE>
+
+                <P-PORT-PROTOTYPE>
+                  <SHORT-NAME>PPort_HealthStatus</SHORT-NAME>
+                  <PROVIDED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_HealthStatus
+                  </PROVIDED-INTERFACE-TREF>
+                </P-PORT-PROTOTYPE>
+
+                <P-PORT-PROTOTYPE>
+                  <SHORT-NAME>PPort_TelemetryUplink</SHORT-NAME>
+                  <PROVIDED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_TelemetryUplink
+                  </PROVIDED-INTERFACE-TREF>
+                </P-PORT-PROTOTYPE>
+
+                <!-- Required Ports -->
+                <R-PORT-PROTOTYPE>
+                  <SHORT-NAME>RPort_CanBus</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_CanBusAccess
+                  </REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+
+                <R-PORT-PROTOTYPE>
+                  <SHORT-NAME>RPort_EthernetBus</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_EthernetAccess
+                  </REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+
+                <R-PORT-PROTOTYPE>
+                  <SHORT-NAME>RPort_DiagAccess</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_DiagAccess
+                  </REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+
+                <R-PORT-PROTOTYPE>
+                  <SHORT-NAME>RPort_CryptoService</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_CryptoService
+                  </REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+
+                <R-PORT-PROTOTYPE>
+                  <SHORT-NAME>RPort_KeyManagement</SHORT-NAME>
+                  <REQUIRED-INTERFACE-TREF DEST="SERVICE-INTERFACE">
+                    /CratonShield/ServiceInterfaces/SI_KeyManagement
+                  </REQUIRED-INTERFACE-TREF>
+                </R-PORT-PROTOTYPE>
+              </PORTS>
+            </ADAPTIVE-APPLICATION-SW-COMPONENT-TYPE>
+          </ELEMENTS>
+        </AR-PACKAGE>
+
+        <!-- Service Interfaces -->
+        <AR-PACKAGE>
+          <SHORT-NAME>ServiceInterfaces</SHORT-NAME>
+
+          <ELEMENTS>
+            <!-- IDS Alert Service -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_IdsAlerts</SHORT-NAME>
+              <NAMESPACES>
+                <SERVICE-INTERFACE-NAMESPACE>
+                  <SHORT-NAME>cratonshield</SHORT-NAME>
+                  <SYMBOL>cratonshield</SYMBOL>
+                </SERVICE-INTERFACE-NAMESPACE>
+              </NAMESPACES>
+              <EVENTS>
+                <VARIABLE-DATA-PROTOTYPE>
+                  <SHORT-NAME>SecurityAlert</SHORT-NAME>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">
+                    /CratonShield/DataTypes/DT_SecurityAlert
+                  </TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+              </EVENTS>
+              <METHODS>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>GetAlertHistory</SHORT-NAME>
+                  <ARGUMENTS>
+                    <ARGUMENT-DATA-PROTOTYPE>
+                      <SHORT-NAME>maxEntries</SHORT-NAME>
+                      <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">
+                        /CratonShield/DataTypes/DT_UInt32
+                      </TYPE-TREF>
+                      <DIRECTION>IN</DIRECTION>
+                    </ARGUMENT-DATA-PROTOTYPE>
+                  </ARGUMENTS>
+                </CLIENT-SERVER-OPERATION>
+              </METHODS>
+            </SERVICE-INTERFACE>
+
+            <!-- Health Status Service -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_HealthStatus</SHORT-NAME>
+              <FIELDS>
+                <FIELD>
+                  <SHORT-NAME>PlatformHealth</SHORT-NAME>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">
+                    /CratonShield/DataTypes/DT_PlatformHealth
+                  </TYPE-TREF>
+                  <HAS-GETTER>true</HAS-GETTER>
+                  <HAS-NOTIFIER>true</HAS-NOTIFIER>
+                </FIELD>
+              </FIELDS>
+            </SERVICE-INTERFACE>
+
+            <!-- Telemetry Uplink Service -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_TelemetryUplink</SHORT-NAME>
+              <METHODS>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>SendTelemetryBatch</SHORT-NAME>
+                  <ARGUMENTS>
+                    <ARGUMENT-DATA-PROTOTYPE>
+                      <SHORT-NAME>encryptedPayload</SHORT-NAME>
+                      <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">
+                        /CratonShield/DataTypes/DT_ByteArray
+                      </TYPE-TREF>
+                      <DIRECTION>IN</DIRECTION>
+                    </ARGUMENT-DATA-PROTOTYPE>
+                  </ARGUMENTS>
+                </CLIENT-SERVER-OPERATION>
+              </METHODS>
+            </SERVICE-INTERFACE>
+
+            <!-- CAN Bus Access Service -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_CanBusAccess</SHORT-NAME>
+              <EVENTS>
+                <VARIABLE-DATA-PROTOTYPE>
+                  <SHORT-NAME>CanFrame</SHORT-NAME>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">
+                    /CratonShield/DataTypes/DT_CanFrame
+                  </TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+              </EVENTS>
+            </SERVICE-INTERFACE>
+
+            <!-- Ethernet Access Service -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_EthernetAccess</SHORT-NAME>
+              <EVENTS>
+                <VARIABLE-DATA-PROTOTYPE>
+                  <SHORT-NAME>EthernetPacket</SHORT-NAME>
+                  <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">
+                    /CratonShield/DataTypes/DT_EthernetPacket
+                  </TYPE-TREF>
+                </VARIABLE-DATA-PROTOTYPE>
+              </EVENTS>
+            </SERVICE-INTERFACE>
+
+            <!-- Diagnostic Access Service -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_DiagAccess</SHORT-NAME>
+              <METHODS>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>ProcessUdsRequest</SHORT-NAME>
+                  <ARGUMENTS>
+                    <ARGUMENT-DATA-PROTOTYPE>
+                      <SHORT-NAME>request</SHORT-NAME>
+                      <TYPE-TREF DEST="IMPLEMENTATION-DATA-TYPE">
+                        /CratonShield/DataTypes/DT_ByteArray
+                      </TYPE-TREF>
+                      <DIRECTION>IN</DIRECTION>
+                    </ARGUMENT-DATA-PROTOTYPE>
+                  </ARGUMENTS>
+                </CLIENT-SERVER-OPERATION>
+              </METHODS>
+            </SERVICE-INTERFACE>
+
+            <!-- Crypto Service (maps to AUTOSAR Crypto Service Manager) -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_CryptoService</SHORT-NAME>
+              <METHODS>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>Encrypt</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>Decrypt</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>Sign</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>Verify</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>Hash</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+              </METHODS>
+            </SERVICE-INTERFACE>
+
+            <!-- Key Management Service (maps to AUTOSAR KeyM) -->
+            <SERVICE-INTERFACE>
+              <SHORT-NAME>SI_KeyManagement</SHORT-NAME>
+              <METHODS>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>ProvisionKey</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>RotateKey</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>RevokeKey</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+                <CLIENT-SERVER-OPERATION>
+                  <SHORT-NAME>GetKeyStatus</SHORT-NAME>
+                </CLIENT-SERVER-OPERATION>
+              </METHODS>
+            </SERVICE-INTERFACE>
+          </ELEMENTS>
+        </AR-PACKAGE>
+
+        <!-- Data Types -->
+        <AR-PACKAGE>
+          <SHORT-NAME>DataTypes</SHORT-NAME>
+
+          <ELEMENTS>
+            <IMPLEMENTATION-DATA-TYPE>
+              <SHORT-NAME>DT_UInt32</SHORT-NAME>
+              <CATEGORY>VALUE</CATEGORY>
+            </IMPLEMENTATION-DATA-TYPE>
+
+            <IMPLEMENTATION-DATA-TYPE>
+              <SHORT-NAME>DT_ByteArray</SHORT-NAME>
+              <CATEGORY>VECTOR</CATEGORY>
+            </IMPLEMENTATION-DATA-TYPE>
+
+            <IMPLEMENTATION-DATA-TYPE>
+              <SHORT-NAME>DT_SecurityAlert</SHORT-NAME>
+              <CATEGORY>STRUCTURE</CATEGORY>
+              <SUB-ELEMENTS>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>alertId</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>severity</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>busType</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>sourceId</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>payloadHash</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>timestampUs</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+              </SUB-ELEMENTS>
+            </IMPLEMENTATION-DATA-TYPE>
+
+            <IMPLEMENTATION-DATA-TYPE>
+              <SHORT-NAME>DT_PlatformHealth</SHORT-NAME>
+              <CATEGORY>STRUCTURE</CATEGORY>
+              <SUB-ELEMENTS>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>crypto</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>keyManager</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>secureBoot</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>canMonitor</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>ethMonitor</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>idsEngine</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>firewall</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>diagGateway</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>otaValidator</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>anomaly</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>integrity</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>telemetry</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>policyEngine</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+              </SUB-ELEMENTS>
+            </IMPLEMENTATION-DATA-TYPE>
+
+            <IMPLEMENTATION-DATA-TYPE>
+              <SHORT-NAME>DT_CanFrame</SHORT-NAME>
+              <CATEGORY>STRUCTURE</CATEGORY>
+              <SUB-ELEMENTS>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>arbitrationId</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>dlc</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>data</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>isExtended</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>isFd</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>timestampUs</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+              </SUB-ELEMENTS>
+            </IMPLEMENTATION-DATA-TYPE>
+
+            <IMPLEMENTATION-DATA-TYPE>
+              <SHORT-NAME>DT_EthernetPacket</SHORT-NAME>
+              <CATEGORY>STRUCTURE</CATEGORY>
+              <SUB-ELEMENTS>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>srcMac</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>dstMac</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>vlanId</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>ethertype</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                <IMPLEMENTATION-DATA-TYPE-ELEMENT>
+                  <SHORT-NAME>payload</SHORT-NAME>
+                </IMPLEMENTATION-DATA-TYPE-ELEMENT>
+              </SUB-ELEMENTS>
+            </IMPLEMENTATION-DATA-TYPE>
+          </ELEMENTS>
+        </AR-PACKAGE>
+
+        <!-- Execution Manifest -->
+        <AR-PACKAGE>
+          <SHORT-NAME>ExecutionManifest</SHORT-NAME>
+
+          <ELEMENTS>
+            <EXECUTABLE>
+              <SHORT-NAME>CratonShieldExe</SHORT-NAME>
+              <CATEGORY>APPLICATION_LEVEL</CATEGORY>
+              <MINIMUM-TIMER-GRANULARITY-VALUE>0.001</MINIMUM-TIMER-GRANULARITY-VALUE>
+              <ROOT-SW-COMPONENT-PROTOTYPE>
+                <SHORT-NAME>CratonShieldRuntimeInstance</SHORT-NAME>
+                <APPLICATION-TYPE-TREF DEST="ADAPTIVE-APPLICATION-SW-COMPONENT-TYPE">
+                  /CratonShield/ApplicationDesign/CratonShieldRuntime
+                </APPLICATION-TYPE-TREF>
+              </ROOT-SW-COMPONENT-PROTOTYPE>
+            </EXECUTABLE>
+
+            <PROCESS>
+              <SHORT-NAME>CratonShieldProcess</SHORT-NAME>
+              <EXECUTABLE-REF DEST="EXECUTABLE">
+                /CratonShield/ExecutionManifest/CratonShieldExe
+              </EXECUTABLE-REF>
+              <STATE-DEPENDENT-STARTUP-CONFIGS>
+                <STATE-DEPENDENT-STARTUP-CONFIG>
+                  <FUNCTION-GROUP-STATE-IREFS>
+                    <FUNCTION-GROUP-STATE-IREF>
+                      <FUNCTION-GROUP-REF DEST="FUNCTION-GROUP">
+                        /CratonShield/ExecutionManifest/MachineState
+                      </FUNCTION-GROUP-REF>
+                      <FUNCTION-GROUP-STATE-REF DEST="FUNCTION-GROUP-STATE">
+                        /CratonShield/ExecutionManifest/MachineState/Running
+                      </FUNCTION-GROUP-STATE-REF>
+                    </FUNCTION-GROUP-STATE-IREF>
+                  </FUNCTION-GROUP-STATE-IREFS>
+                  <STARTUP-CONFIG>
+                    <SCHEDULING-POLICY>SCHED_FIFO</SCHEDULING-POLICY>
+                    <SCHEDULING-PRIORITY>90</SCHEDULING-PRIORITY>
+                    <RESOURCE-GROUP-REF DEST="RESOURCE-GROUP">
+                      /CratonShield/ExecutionManifest/ResourceGroups/SecurityCritical
+                    </RESOURCE-GROUP-REF>
+                  </STARTUP-CONFIG>
+                </STATE-DEPENDENT-STARTUP-CONFIG>
+              </STATE-DEPENDENT-STARTUP-CONFIGS>
+            </PROCESS>
+
+            <FUNCTION-GROUP>
+              <SHORT-NAME>MachineState</SHORT-NAME>
+              <FUNCTION-GROUP-STATES>
+                <FUNCTION-GROUP-STATE>
+                  <SHORT-NAME>Off</SHORT-NAME>
+                </FUNCTION-GROUP-STATE>
+                <FUNCTION-GROUP-STATE>
+                  <SHORT-NAME>Verify</SHORT-NAME>
+                </FUNCTION-GROUP-STATE>
+                <FUNCTION-GROUP-STATE>
+                  <SHORT-NAME>Running</SHORT-NAME>
+                </FUNCTION-GROUP-STATE>
+                <FUNCTION-GROUP-STATE>
+                  <SHORT-NAME>Shutdown</SHORT-NAME>
+                </FUNCTION-GROUP-STATE>
+              </FUNCTION-GROUP-STATES>
+            </FUNCTION-GROUP>
+          </ELEMENTS>
+        </AR-PACKAGE>
+
+        <!-- Resource Groups -->
+        <AR-PACKAGE>
+          <SHORT-NAME>ResourceGroups</SHORT-NAME>
+
+          <ELEMENTS>
+            <RESOURCE-GROUP>
+              <SHORT-NAME>SecurityCritical</SHORT-NAME>
+              <CPU-USAGE>80</CPU-USAGE>
+              <MEM-USAGE>67108864</MEM-USAGE> <!-- 64 MiB -->
+            </RESOURCE-GROUP>
+          </ELEMENTS>
+        </AR-PACKAGE>
+
+        <!-- Machine Mapping -->
+        <AR-PACKAGE>
+          <SHORT-NAME>MachineMapping</SHORT-NAME>
+
+          <ELEMENTS>
+            <MACHINE-DESIGN>
+              <SHORT-NAME>VehicleECU</SHORT-NAME>
+              <COMMUNICATION-CONNECTORS>
+                <ETHERNET-COMMUNICATION-CONNECTOR>
+                  <SHORT-NAME>EthConn_Vehicle</SHORT-NAME>
+                </ETHERNET-COMMUNICATION-CONNECTOR>
+              </COMMUNICATION-CONNECTORS>
+              <PROCESSORS>
+                <PROCESSOR>
+                  <SHORT-NAME>CortexA53</SHORT-NAME>
+                  <CORES>
+                    <PROCESSOR-CORE>
+                      <SHORT-NAME>Core0</SHORT-NAME>
+                    </PROCESSOR-CORE>
+                    <PROCESSOR-CORE>
+                      <SHORT-NAME>Core1</SHORT-NAME>
+                    </PROCESSOR-CORE>
+                    <PROCESSOR-CORE>
+                      <SHORT-NAME>Core2</SHORT-NAME>
+                    </PROCESSOR-CORE>
+                    <PROCESSOR-CORE>
+                      <SHORT-NAME>Core3</SHORT-NAME>
+                    </PROCESSOR-CORE>
+                  </CORES>
+                </PROCESSOR>
+              </PROCESSORS>
+            </MACHINE-DESIGN>
+          </ELEMENTS>
+        </AR-PACKAGE>
+
+      </AR-PACKAGES>
+    </AR-PACKAGE>
+
+  </AR-PACKAGES>
+</AUTOSAR>

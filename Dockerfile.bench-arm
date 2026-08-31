@@ -1,0 +1,52 @@
+# Dockerfile for ARM (aarch64) benchmark cross-compilation via QEMU.
+# DEV/BENCH-ONLY image — not for production use.
+#
+# Used by scripts/bench-arm.sh to run Criterion benchmarks under
+# QEMU user-mode emulation.
+
+FROM rust:1.82-slim-bookworm
+
+# Install cross-compilation toolchain and QEMU
+RUN apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    qemu-user \
+    qemu-user-binfmt \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-deny in a dedicated, cacheable RUN layer.
+#
+# Supply-chain gate (MED-8) — BSL-1.1 + ISO/SAE 21434 compliance:
+# Every artifact-producing build (including bench/cross-compile images)
+# must enforce the workspace's dependency policy (`deny.toml`) BEFORE
+# compiling. Even though this image is DEV/BENCH-ONLY, gating it on the
+# same supply-chain check keeps benchmark numbers grounded in a
+# policy-compliant dependency snapshot.
+#
+# Version pin (0.18.2) MUST match:
+#   - .github/workflows/ci.yml
+#   - .github/workflows/security.yml
+#   - .github/workflows/release.yml
+#   - Dockerfile
+# When bumping, update ALL locations together. See `docs/supply-chain.md`.
+RUN cargo install --version 0.18.2 --locked cargo-deny
+
+WORKDIR /work
+COPY . .
+
+# Run as unprivileged user
+RUN useradd -m -u 1000 bench && chown -R bench /work
+USER bench
+
+# Set up cross-compilation environment
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER="qemu-aarch64 -L /usr/aarch64-linux-gnu"
+
+# Supply-chain check MUST run before `cargo build` (MED-8).
+# Fails the image build if `deny.toml` policy is violated.
+RUN cargo deny check
+
+# Pre-build dependencies for the aarch64 target
+# release-safe = release + overflow-checks=true (defence-in-depth for security crates)
+RUN rustup target add aarch64-unknown-linux-gnu && \
+    cargo build --profile release-safe --workspace --target aarch64-unknown-linux-gnu

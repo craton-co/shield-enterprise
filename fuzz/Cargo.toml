@@ -1,0 +1,110 @@
+[package]
+name = "craton-shield-enterprise-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone — not part of the enterprise workspace (cargo-fuzz convention).
+[workspace]
+
+[dependencies]
+libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
+
+# Local enterprise crates
+# `unauthenticated-restore` is enabled so the `telemetry_flush` fuzz
+# target can exercise the legacy `PersistedFlushCounter::restore(u64)`
+# rollback path — that path is precisely the threat surface we want the
+# fuzzer to probe. NOT a production dependency.
+vs-vsoc-telemetry = { path = "../crates/vsoc-telemetry", features = ["unauthenticated-restore"] }
+vs-crypto-pkcs11 = { path = "../crates/crypto-pkcs11" }
+vs-crypto-tpm = { path = "../crates/crypto-tpm" }
+vs-p256-validate = { path = "../crates/p256-validate" }
+# The `fuzz` feature on `vs-hal-qnx` gates the `pub` visibility of
+# `parse_can_frame` / `parse_eth_frame` / `serialize_can_frame` so the
+# `qnx_can_parse` and `qnx_eth_parse` fuzz targets can reach them.
+vs-hal-qnx = { path = "../crates/hal-qnx", features = ["fuzz"] }
+
+# Core crates live in the sibling `craton-shield` repo under `core/`.
+vs-can-monitor = { path = "../../craton-shield/core/can-monitor" }
+vs-eth-monitor = { path = "../../craton-shield/core/eth-monitor" }
+vs-crypto = { path = "../../craton-shield/core/crypto" }
+vs-ota-validator = { path = "../../craton-shield/core/ota-validator" }
+vs-diag-gateway = { path = "../../craton-shield/auto/diag-gateway" }
+vs-types = { path = "../../craton-shield/core/types" }
+vs-report-iso21434 = { path = "../../craton-shield/core/report-iso21434" }
+vs-report-iec62443 = { path = "../../craton-shield/core/report-iec62443" }
+
+[[bin]]
+name = "can_frame"
+path = "targets/can_frame.rs"
+doc = false
+
+[[bin]]
+name = "eth_packet"
+path = "targets/eth_packet.rs"
+doc = false
+
+[[bin]]
+name = "ota_metadata"
+path = "targets/ota_metadata.rs"
+doc = false
+
+[[bin]]
+name = "uds_request"
+path = "targets/uds_request.rs"
+doc = false
+
+[[bin]]
+name = "tara_input"
+path = "targets/tara_input.rs"
+doc = false
+
+[[bin]]
+name = "iec62443_capabilities"
+path = "targets/iec62443_capabilities.rs"
+doc = false
+
+[[bin]]
+name = "telemetry_entry"
+path = "targets/telemetry_entry.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "pkcs11_mock_crypto"
+path = "targets/pkcs11_mock_crypto.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "tpm_ec_point"
+path = "targets/tpm_ec_point.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "qnx_can_parse"
+path = "targets/qnx_can_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "qnx_eth_parse"
+path = "targets/qnx_eth_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "telemetry_flush"
+path = "targets/telemetry_flush.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "iec62304_input"
+path = "targets/iec62304_input.rs"
+test = false
+doc = false

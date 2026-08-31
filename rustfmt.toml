@@ -1,0 +1,4 @@
+# Craton Shield Enterprise formatting configuration.
+# Uses default rustfmt settings for maximum compatibility.
+# Run: cargo fmt --all
+edition = "2021"

@@ -1,0 +1,84 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hal-qnx",
+    "crates/vsoc-telemetry",
+    "crates/crypto-pkcs11",
+    "crates/crypto-tpm",
+    "crates/p256-validate",
+    "crates/integration-tests",
+]
+
+# Virtual workspace (no root `[package]`). MED-6: the old root crate
+# `vs-cratonshield-enterprise-tests` published its `src/lib.rs` test
+# mocks as part of `cargo doc --workspace`, and forced all workspace
+# consumers to resolve the test-only dev-dependencies. The integration
+# tests and mock-setup examples have moved to `crates/integration-tests/`
+# (publish = false, doctest = false), so the root is now metadata-only.
+
+[workspace.package]
+edition = "2021"
+version = "0.7.1"
+# Non-SPDX licence; each crate sets `license-file.workspace = true` instead
+# of the usual `license = "…"` so metadata is valid.
+rust-version = "1.82"
+repository = "https://github.com/craton-co/craton-shield-enterprise"
+homepage = "https://github.com/craton-co/craton-shield-enterprise"
+description = "Hardware-backed cryptographic providers, QNX HAL, and fleet telemetry for the Craton Shield vehicle cybersecurity platform"
+authors = ["Craton <info@craton.com.ar>"]
+license-file = "LICENSE"
+readme = "README.md"
+keywords = ["automotive", "cybersecurity", "no-std", "hsm", "tpm"]
+categories = ["embedded", "no-std", "cryptography", "hardware-support"]
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+# `#[deprecated]` items in the public API should not break internal callers
+# during the transition window. Deprecations still render in rustdoc.
+deprecated = "allow"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# SECURITY (LOW-2): cast lints are DENY at the workspace level so any
+# integer-width / sign-loss / precision-loss / lossless cast must be
+# justified per-site with `#[allow(clippy::cast_*)]` and a SAFETY
+# comment, or rewritten using `TryFrom`. Blanket-allowing these
+# workspace-wide erodes defence-in-depth for ISO 26262 audit. FFI-heavy
+# crates (`crypto-pkcs11`, `crypto-tpm`) may re-allow per-crate with
+# justification in their own `Cargo.toml` if the FFI shape requires it.
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"
+cast_precision_loss = "deny"
+cast_lossless = "deny"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+# SECURITY (HIGH-X): trap on arithmetic overflow in release builds. Users
+# following quick-start guides run `cargo build --release` and would
+# otherwise silently get wrap-around semantics on integer overflows, which
+# in crypto / counter / length-arithmetic paths can be exploited (e.g.
+# AES-GCM nonce-counter wrap, length-confusion in framing). The
+# `[profile.release-safe]` alias below is kept as a no-op compatibility
+# shim for callers who already opt into it.
+overflow-checks = true
+
+[profile.release-perf]
+inherits = "release"
+opt-level = 3
+# Use opt-level=3 instead of "z" when binary size is not the primary
+# constraint. This can improve throughput for crypto-heavy workloads
+# (AES-GCM, SHA-256 chaining) by 10-30% due to better loop unrolling
+# and vectorization.
+
+[profile.release-safe]
+inherits = "release"
+overflow-checks = true

@@ -1,0 +1,111 @@
+[package]
+name = "vs-crypto-pkcs11"
+description = "Craton Shield PKCS#11 HSM-backed crypto provider"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["pkcs11", "hsm", "crypto", "no-std", "automotive"]
+categories = ["cryptography", "no-std", "embedded", "hardware-support"]
+# BSL-1.1 is not SPDX; point at the workspace LICENSE file.
+license-file = "../../LICENSE"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+vs-types = { path = "../../../craton-shield/core/types" }
+vs-crypto = { path = "../../../craton-shield/core/crypto" }
+vs-p256-validate = { path = "../p256-validate" }
+subtle = { version = "2", default-features = false }
+
+[dev-dependencies]
+# Used to serialize tests that mutate process-global AtomicU32 counters
+# (e.g. FIND_FINAL_CALLS, FINALIZE_CALLS, LAST_FIND_CLASS) so that parallel
+# test execution does not pollute the counters and produce flaky failures.
+serial_test = "3"
+
+[features]
+# `strict-rng` is on by default. This is an automotive cybersecurity
+# platform: a TRNG that silently fails (returns `CKR_OK` without writing)
+# would otherwise feed deterministic zero/sentinel bytes into every
+# downstream key/nonce generator. Pay the small CPU cost up front and
+# expose a failing token as `VsError::CryptoError`.
+#
+# Disabling the sentinel check requires TWO explicit opt-ins: clearing
+# `strict-rng` from `default-features` AND enabling `unsafe-fuzz-trng`.
+# A bare `default-features = false` keeps the sentinel active — see
+# `RANDOM_SENTINEL_ENABLED` in `src/lib.rs` and audit-M5 for rationale.
+default = ["strict-rng"]
+# Enables tamper-evidence on `random_bytes`: pre-fill the output with a
+# sentinel pattern and reject the call if the token returns CKR_OK without
+# overwriting (or with the pre-fill pattern unchanged). Adds a small CPU
+# cost but catches faulty or malicious TRNG backends that fail silently.
+strict-rng = []
+# Exposes `NoOpNoncePersistence` for downstream test harnesses. Hazard:
+# enabling this in production builds re-enables AES-GCM nonce reuse
+# across reboots (the no-op sink does not persist anything). Audit fix
+# CRIT-2 — keep gated to test rigs only.
+test-only = []
+# **UNSAFE — fuzzing/in-process-RNG harnesses only.** Disables the
+# `random_bytes` sentinel check so a fuzzer can drive the provider with a
+# known-good in-process generator that may legitimately produce all-zero
+# or pre-fill-pattern output. This feature is gated by a `compile_error!`
+# in non-debug builds (see audit-M5) to prevent it from leaking into a
+# release artifact via Cargo feature unification. The sentinel is
+# disabled ONLY when this feature is on AND `strict-rng` is off.
+unsafe-fuzz-trng = []
+# Enabling this causes `delete_key` (the `CryptoProvider` trait impl on
+# `Pkcs11CryptoProvider`) to issue `C_DestroyObject` against the
+# PKCS#11 token for the registered handle in the `KeyId` slot, then
+# forget the handle locally. This is destructive and irreversible —
+# the underlying key material is gone from the HSM and cannot be
+# recovered. Most safety-critical deployments should leave this
+# DISABLED (the default) and use vendor tooling
+# (`pkcs11-tool --delete-object`, the KMS UI, etc.) to perform
+# destruction under the HSM's dual-control / ceremony policy. See
+# audit-M4. Callers that want the historical local-only "forget the
+# handle" behaviour should call
+# `Pkcs11CryptoProvider::forget_local_handle` directly regardless of
+# this feature flag.
+policy-allow-token-destroy = []
+
+# Cannot use `lints.workspace = true` together with per-crate overrides.
+# Replicate workspace lints here and override unsafe_code to allow (FFI boundary).
+[lints.rust]
+unsafe_code = "allow"   # FFI call sites; all carry SAFETY comments.
+# `#[deprecated]` items in the public API should not break internal callers
+# during the transition window (matches the workspace-level allow). The
+# legacy `aes_gcm_encrypt(caller-supplied nonce)` path is deprecated in
+# favour of `aes_gcm_encrypt_with_persistence(...)` (audit fix CRIT-2),
+# but in-tree tests still exercise it for regression coverage.
+deprecated = "allow"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# LOW-2 audit fix: workspace tightened these casts to `deny`. This crate
+# re-allows them locally because PKCS#11 binding code converts between
+# `CK_ULONG` (`u32` on Windows, `u64` on Unix per the Cryptoki spec) and
+# Rust-side widths at almost every function-pointer boundary; the casts
+# are required by the spec, not by Rust expressivity. Per-site
+# `#[allow(...)]` would touch dozens of FFI shim lines and obscure the
+# binding shape that auditors verify against the PKCS#11 header. The
+# re-allow is confined to this crate; non-FFI crates inherit the
+# workspace `deny`.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+cast_lossless = "allow"
+# FFI-specific: raw-pointer casts are idiomatic in PKCS#11 bindings.
+borrow_as_ptr = "allow"
+ref_as_ptr = "allow"
+ptr_as_ptr = "allow"
+ptr_cast_constness = "allow"

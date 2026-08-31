@@ -1,0 +1,75 @@
+[package]
+name = "vs-integration-tests"
+edition = "2021"
+version = "0.7.1"
+# BSL-1.1 is not an SPDX-approved identifier; use a LicenseRef and point at
+# the LICENSE file so `cargo publish` / crates.io metadata is valid.
+license-file = "../../LICENSE"
+publish = false
+description = "Workspace-wide integration tests and mock-driven examples for Craton Shield Enterprise crates"
+
+# This crate exists purely to host cross-crate integration tests and the
+# illustrative `cargo run --example` binaries. It is intentionally
+# NOT part of the public docs surface — `cargo doc --workspace` previously
+# documented the test mocks as if they were public API (MED-6); moving the
+# tests out of the workspace root crate fixes that, and `doctest = false`
+# below keeps the placeholder `lib` quiet.
+[lib]
+doctest = false
+
+[dependencies]
+# Empty — the placeholder lib does not need any deps. Integration tests
+# (under `tests/`) pull from `[dev-dependencies]` exactly like before.
+
+[dev-dependencies]
+# Mono-repo layout: `craton-shield` (the core repo) and
+# `craton-shield-enterprise` (this repo) are siblings; core crates live
+# under `craton-shield/core/`. Paths here are relative to THIS crate
+# (`crates/integration-tests/`), so we hop up two levels.
+vs-types = { path = "../../../craton-shield/core/types" }
+vs-crypto = { path = "../../../craton-shield/core/crypto" }
+vs-hal-qnx = { path = "../hal-qnx" }
+# SECURITY (CRIT-3): the `unauthenticated-restore` feature is intentionally
+# NOT activated here. Even though this declaration lives in `[dev-dependencies]`
+# of this test-harness crate, cargo's feature unification means any
+# activation on this path can taint the compiled `vs-vsoc-telemetry` artifact
+# that ships to production via `cargo build --workspace --release`. The
+# feature re-exposes `PersistedFlushCounter::restore(u64)`, an unauthenticated
+# rollback that enables AES-GCM nonce reuse. In-crate tests of that legacy
+# shim live inside `crates/vsoc-telemetry` itself where `cfg(test)` exposes
+# the API without a feature flag. Fuzz coverage of the rollback path lives
+# in the standalone `fuzz/` workspace (separate resolution graph). DO NOT
+# add `features = ["unauthenticated-restore"]` here.
+#
+# The `test-only` feature IS activated: HIGH-C cfg-gated the in-crate
+# test-only API surface (`NoOpPersistence`, `TelemetryUplink::flush_no_persist`,
+# `PersistedFlushCounter::restore`) behind `#[cfg(any(test, feature =
+# "test-only"))]`. This crate is a `publish = false` test-harness whose
+# integration tests exercise `flush_no_persist` and `NoOpPersistence`, so
+# the feature must be activated here.
+# Safety: `test-only` only EXPOSES additional API items (no runtime behaviour
+# change). Cargo features are additive, but no production-graph dependent of
+# `vs-vsoc-telemetry` enables this feature; activating it on this
+# non-shipping dev-dep does not taint the production build. DO NOT activate
+# `test-only` together with `unauthenticated-restore` — together they
+# re-expose `PersistedFlushCounter::restore(u64)` which is the documented
+# nonce-reuse footgun.
+vs-vsoc-telemetry = { path = "../vsoc-telemetry", features = ["test-only"] }
+vs-crypto-pkcs11 = { path = "../crypto-pkcs11" }
+vs-crypto-tpm = { path = "../crypto-tpm" }
+
+[[example]]
+name = "pkcs11_mock_setup"
+path = "examples/pkcs11_mock_setup.rs"
+
+[[example]]
+name = "tpm_mock_setup"
+path = "examples/tpm_mock_setup.rs"
+
+[[example]]
+name = "telemetry_uplink"
+path = "examples/telemetry_uplink.rs"
+
+[[example]]
+name = "telemetry_counter_recovery"
+path = "examples/telemetry_counter_recovery.rs"

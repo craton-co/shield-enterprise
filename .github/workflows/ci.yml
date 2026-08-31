@@ -1,0 +1,407 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+        components: rustfmt
+    - name: Format
+      run: cargo fmt --all -- --check
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            cross: true
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+        components: clippy
+        targets: ${{ matrix.target }}
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+      with:
+        key: ${{ matrix.target }}
+    - name: Install cross-compilation tools
+      if: matrix.cross
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-user qemu-user-binfmt \
+          gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+    - name: Clippy
+      run: cargo clippy --workspace --all-targets --target ${{ matrix.target }} -- -D warnings
+    - name: Test
+      run: cargo test --workspace --target ${{ matrix.target }}
+
+  test-hsm-mock:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+      with:
+        key: hsm-mock
+    - name: Test enterprise workspace
+      run: cargo test --workspace
+    - name: Check hal-qnx
+      run: cargo check -p vs-hal-qnx
+    - name: Build examples
+      run: cargo build --examples
+
+  check-thumbv7em:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+        targets: thumbv7em-none-eabihf
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+      with:
+        key: thumbv7em
+    - name: Check no_std enterprise crates on Cortex-M
+      run: |
+        cargo check --target thumbv7em-none-eabihf \
+          -p vs-crypto-pkcs11 \
+          -p vs-crypto-tpm \
+          -p vs-hal-qnx \
+          -p vs-vsoc-telemetry
+
+  check-thumbv7em-softfloat:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+        targets: thumbv7em-none-eabi
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+      with:
+        key: thumbv7em-softfloat
+    - name: Check no_std enterprise crates on soft-float target
+      run: |
+        cargo check --target thumbv7em-none-eabi \
+          -p vs-crypto-pkcs11 \
+          -p vs-crypto-tpm \
+          -p vs-hal-qnx \
+          -p vs-vsoc-telemetry
+
+  check-msrv:
+    # Pins the MSRV claim in docs/build-matrix.md (Rust 1.82.0).
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust 1.82.0
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: 1.82.0
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+      with:
+        key: msrv-1.82.0
+    - name: Check workspace on MSRV
+      run: cargo check --workspace --locked
+
+  test-all-features:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+      with:
+        key: all-features
+    - name: Test with all features
+      run: cargo test --workspace --all-features
+
+  miri:
+    # Run cargo-miri on host-side library tests for the FFI-heavy crates
+    # (vs-crypto-pkcs11, vs-crypto-tpm, vs-hal-qnx). Miri interprets MIR
+    # under a strict aliasing/initialization model and catches undefined
+    # behaviour (UB) in unsafe blocks — out-of-bounds reads, use-after-free,
+    # invalid-value transmutes, uninitialized memory, Stacked/Tree Borrows
+    # violations — that the stable test suite cannot detect.
+    #
+    # Cert-credit rationale: ISO 26262 Part 6 §10 ("Software unit
+    # verification") credits dynamic verification methods that exercise
+    # software with the intent of revealing latent defects. Miri's
+    # interpreter-level checks satisfy §10.4.5 ("verification of safety
+    # properties") for unsafe code paths and complement the existing
+    # cargo-test + clippy + cargo-audit gates.
+    #
+    # Non-blocking (continue-on-error: true): miri sometimes flags benign
+    # FFI shim patterns and is slow enough that flipping it to required
+    # would harm developer velocity. We treat findings as advisory until
+    # the test suite is fully miri-clean.
+    # TODO(LOW-8): flip `continue-on-error` to `false` once the host-side
+    #              mock FFI tests pass cleanly under miri for >= 30 days.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      # `-Zmiri-strict-provenance` enforces the stricter pointer-provenance
+      # model and surfaces more UB in `*const u8` / `*mut u8` shuffling.
+      # Filesystem isolation is left enabled — the host-side mocks for
+      # PKCS#11/TPM/QNX do not touch the filesystem.
+      MIRIFLAGS: "-Zmiri-strict-provenance"
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup nightly Rust with miri
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: nightly
+        components: miri
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+      with:
+        key: miri-nightly
+    - name: cargo miri setup
+      # One-time setup of the miri sysroot for the nightly toolchain.
+      run: cargo miri setup
+    - name: cargo miri test (FFI-heavy crates, lib targets only)
+      # `--lib` only: miri cannot model arbitrary host extern calls, so
+      # integration tests that link against real PKCS#11/TPM libraries are
+      # excluded. Library unit tests use in-process mock function pointers
+      # which are miri-compatible. Scope is restricted to the unsafe-heavy
+      # crates to keep wall-clock under the workflow timeout.
+      run: |
+        cargo miri test --lib -p vs-crypto-pkcs11
+        cargo miri test --lib -p vs-crypto-tpm
+        cargo miri test --lib -p vs-hal-qnx
+
+  semver-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+    - name: Install cargo-semver-checks
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-semver-checks
+    - name: Check semver compatibility
+      run: cargo semver-checks check-release --workspace
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+        components: llvm-tools-preview
+    - name: Enable Rust Cache
+      uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-llvm-cov
+    - name: Generate code coverage
+      run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+    - name: Enforce 85% workspace + 80% per-crate line coverage
+      # We check two thresholds: a workspace aggregate (≥ 85%) and a
+      # per-crate floor (≥ 80% each). Per-crate coverage is reported by
+      # running `cargo llvm-cov --package <name> --summary-only` for every
+      # workspace member, so a single weak crate cannot hide behind a
+      # strong-crate average.
+      run: |
+        set -euo pipefail
+        cargo llvm-cov report --summary-only | tee cov-summary.txt
+        pct=$(awk '/^TOTAL/ {gsub("%", "", $(NF-3)); print $(NF-3)}' cov-summary.txt)
+        echo "Workspace line coverage: ${pct}%"
+        awk -v p="$pct" 'BEGIN { if (p+0 < 85) { printf "Workspace coverage %s%% below 85%% threshold\n", p; exit 1 } }'
+        for crate in vs-crypto-pkcs11 vs-crypto-tpm vs-hal-qnx vs-vsoc-telemetry; do
+          echo "--- ${crate} ---"
+          cargo llvm-cov report --summary-only --package "${crate}" | tee "cov-${crate}.txt"
+          cpct=$(awk '/^TOTAL/ {gsub("%", "", $(NF-3)); print $(NF-3)}' "cov-${crate}.txt")
+          echo "${crate} line coverage: ${cpct}%"
+          awk -v p="$cpct" -v c="${crate}" 'BEGIN { if (p+0 < 80) { printf "%s coverage %s%% below 80%% per-crate threshold\n", c, p; exit 1 } }'
+        done
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: lcov.info
+
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+    - name: Check Docs
+      run: cargo doc --workspace --no-deps --document-private-items
+      env:
+        RUSTDOCFLAGS: -D warnings
+
+  reproducible-build:
+    # Two identical release builds must produce byte-identical binaries.
+    # Executes the same workspace-wide release build twice from scratch
+    # and compares SHA-256 sums. Covers the reproducibility claim in
+    # docs/supply-chain.md.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+    - name: First release build
+      run: |
+        set -euo pipefail
+        cargo build --release --workspace --locked
+        # Collect reproducibility-relevant artifacts only: rlibs, static
+        # libs, and cdylibs. We deliberately exclude *.d (cargo dep-info,
+        # which embeds absolute paths) and executables (this is a library
+        # workspace).
+        find target/release -maxdepth 2 -type f \
+          \( -name '*.rlib' -o -name '*.a' -o -name '*.so' \) \
+          -printf '%P\n' | sort > build1-files.txt
+        count1=$(wc -l < build1-files.txt)
+        echo "First build produced ${count1} artifact(s)"
+        if [ "${count1}" -lt 5 ]; then
+          echo "::error::Reproducible-build check found only ${count1} artifact(s); expected at least 5"
+          cat build1-files.txt
+          exit 1
+        fi
+        # Hash each artifact and key it by basename with the cargo
+        # metadata hash stripped, so the listing is comparable across
+        # builds even though rlib filenames contain a per-build hash.
+        : > build1-hashes.txt
+        while read -r f; do
+          h=$(sha256sum "target/release/$f" | awk '{print $1}')
+          key=$(basename "$f" | sed -E 's/-[0-9a-f]{16,}\.(rlib|a|so)$/.\1/')
+          printf '%s  %s\n' "${h}" "${key}" >> build1-hashes.txt
+        done < build1-files.txt
+        sort -k 2 build1-hashes.txt -o build1-hashes.txt
+        mv target target-1
+    - name: Second release build
+      run: |
+        set -euo pipefail
+        cargo build --release --workspace --locked
+        find target/release -maxdepth 2 -type f \
+          \( -name '*.rlib' -o -name '*.a' -o -name '*.so' \) \
+          -printf '%P\n' | sort > build2-files.txt
+        count2=$(wc -l < build2-files.txt)
+        echo "Second build produced ${count2} artifact(s)"
+        if [ "${count2}" -lt 5 ]; then
+          echo "::error::Reproducible-build check found only ${count2} artifact(s) on second build; expected at least 5"
+          cat build2-files.txt
+          exit 1
+        fi
+        count1=$(wc -l < build1-files.txt)
+        if [ "${count1}" -ne "${count2}" ]; then
+          echo "::error::Artifact count differs between builds: build1=${count1}, build2=${count2}"
+          echo "--- build1 ---"
+          cat build1-files.txt
+          echo "--- build2 ---"
+          cat build2-files.txt
+          exit 1
+        fi
+        : > build2-hashes.txt
+        while read -r f; do
+          h=$(sha256sum "target/release/$f" | awk '{print $1}')
+          key=$(basename "$f" | sed -E 's/-[0-9a-f]{16,}\.(rlib|a|so)$/.\1/')
+          printf '%s  %s\n' "${h}" "${key}" >> build2-hashes.txt
+        done < build2-files.txt
+        sort -k 2 build2-hashes.txt -o build2-hashes.txt
+    - name: Diff hashes
+      run: |
+        set -euo pipefail
+        if [ ! -s build1-hashes.txt ] || [ ! -s build2-hashes.txt ]; then
+          echo "::error::Hash listing is empty — reproducibility check did not verify anything"
+          exit 1
+        fi
+        if ! diff -u build1-hashes.txt build2-hashes.txt > hash-diff.txt; then
+          echo "::error::Release build is not reproducible — hashes differ for the following artifacts:"
+          # Print only the basenames (column 2) of lines that changed, so
+          # the failure is actionable.
+          awk '/^[-+][^-+]/ {print $0}' hash-diff.txt
+          exit 1
+        fi
+        echo "Reproducibility verified for $(wc -l < build1-hashes.txt) artifact(s)"
+
+  supply-chain:
+    # Run cargo-audit and cargo-deny on every push / PR so known-vulnerable
+    # dependencies cannot merge to main between Sunday runs of the Security
+    # workflow. Tracks ISO 21434 RQ-WP-08-02 supply-chain controls.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # stable
+      with:
+        toolchain: stable
+    - name: Install cargo-audit
+      # Version pinned to match `.github/workflows/release.yml` (verify job)
+      # and `.github/workflows/security.yml` (nightly audit job) so all three
+      # gates exercise the same auditor (MED-3, MED-12).
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-audit@0.21.2
+    - name: Install cargo-deny
+      # Version pinned to match `.github/workflows/release.yml` (verify job)
+      # and `.github/workflows/security.yml` (nightly deny job) so all three
+      # gates apply the same policy engine (MED-3, MED-12).
+      uses: taiki-e/install-action@37461a1de4134bec92ef79ff5d032a53de2c4e85 # v2
+      with:
+        tool: cargo-deny@0.18.2
+    - name: cargo audit
+      run: cargo audit
+    - name: cargo deny check
+      run: cargo deny check
+
+  markdown-links:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Check markdown links
+      uses: lycheeverse/lychee-action@f613c4a64e50d792e0b31ec34bbcbba12263c6a6 # v2
+      with:
+        args: >-
+          --no-progress
+          --exclude-loopback
+          --exclude 'mailto:.*'
+          --exclude 'https://github.com/craton-co/craton-shield-enterprise/actions/.*'
+          --exclude 'https://github.com/orgs/craton-co/teams/.*'
+          '**/*.md'
+        fail: true

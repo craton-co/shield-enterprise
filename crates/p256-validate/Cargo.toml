@@ -1,0 +1,64 @@
+[package]
+name = "vs-p256-validate"
+description = "P-256 software on-curve validation with Solinas fast reduction"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["p256", "ecdsa", "no-std", "automotive", "crypto"]
+categories = ["cryptography", "no-std", "embedded"]
+# BSL-1.1 is not SPDX; point at the workspace LICENSE file.
+license-file = "../../LICENSE"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+vs-types = { path = "../../../craton-shield/core/types" }
+
+[features]
+default = []
+
+# This crate is pure math with no FFI, so `unsafe_code = deny` from the
+# workspace applies unchanged. We DO, however, re-allow two cast lints
+# locally with justification (LOW-2 audit fix):
+#
+# `cast_possible_truncation` / `cast_sign_loss`:
+#   This crate implements 256-bit big-integer arithmetic over P-256
+#   (NIST secp256r1) using 64-bit limbs internally and a 32-bit-limb
+#   schoolbook multiply for the Solinas fast reduction. Limb operations
+#   intentionally split wide intermediates: `(u128 → u64)` extracts the
+#   low 64 bits of a 128-bit limb-product carry chain; `(i128 → u64)`
+#   reconstructs a 64-bit limb from a signed difference after explicit
+#   borrow handling (`if diff < 0 { *slot = (diff + (1i128 << 64)) as u64 }`);
+#   `(u64 → u32)` splits a 64-bit limb into the two 32-bit halves used
+#   by the Solinas reducer. Every one of these casts is a deliberate,
+#   provably-total limb-truncation that mirrors the algorithm spec —
+#   not a width-coercion bug. Rewriting every limb extraction with
+#   `u64::try_from(...).unwrap()` would (a) panic on the same input
+#   classes the cast handles correctly, and (b) bloat the code with
+#   `.unwrap()`s that the project policy (CLAUDE.md) forbids in
+#   production paths. The re-allow is scoped to this crate; the
+#   workspace deny still applies everywhere else.
+[lints.rust]
+unsafe_code = "deny"
+deprecated = "allow"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# See justification in the comment block above the [lints.rust] table.
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+# Not used by this crate's algorithm but kept consistent with the
+# workspace defaults so an upstream lint flip does not need a per-crate
+# follow-up.
+cast_precision_loss = "deny"
+cast_lossless = "deny"
