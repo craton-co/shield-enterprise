@@ -1,5 +1,5 @@
 # Build Stage
-FROM rust:1.82-slim-bookworm AS builder
+FROM rust:1.97-slim-bookworm AS builder
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
